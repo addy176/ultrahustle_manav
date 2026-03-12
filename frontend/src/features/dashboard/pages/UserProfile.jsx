@@ -10,15 +10,6 @@ import "../../../Darkuser.css";
 import "../../onboarding/components/OnboardingSelect.css";
 
 import { getMyPersonalInfo } from "../api/personalInfoApi";
-import { getMyPortfolio } from "../api/portfolioApi";
-import {
-  followUser,
-  getFollowCounts,
-  getFollowers,
-  getFollowing,
-  removeFollower as apiRemoveFollower,
-  unfollowUser,
-} from "../api/followApi";
 
 
 const UserProfile = (props) => {
@@ -60,8 +51,6 @@ const UserProfile = (props) => {
   const skillsContainerRef = useRef(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [openFollowModal, setOpenFollowModal] = useState(false);
-  const [viewerUserId, setViewerUserId] = useState(null);
-  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
 
   // ✅ Activity Calendar state
   const [openActivityCalendar, setOpenActivityCalendar] = useState(false);
@@ -244,10 +233,6 @@ const UserProfile = (props) => {
         if (!mounted) return;
         setPersonalInfo(data);
 
-        // Try to capture numeric user id if backend provides it.
-        const numericId = data?.user_id ?? data?.id ?? null;
-        if (numericId) setViewerUserId(numericId);
-
         const displayName = String(data?.display_name || "").trim();
         const first = String(data?.first_name || "").trim();
         const last = String(data?.last_name || "").trim();
@@ -298,48 +283,6 @@ const UserProfile = (props) => {
     };
   }, []);
 
-  // Follow counts (needs numeric user id)
-  useEffect(() => {
-    let mounted = true;
-    const loadCounts = async () => {
-      if (!viewerUserId) return;
-      try {
-        const res = await getFollowCounts(viewerUserId);
-        const data = res?.data ?? res;
-
-        const followers =
-          data?.followers ??
-          data?.followers_count ??
-          data?.follower_count ??
-          data?.count_followers ??
-          data?.counts?.followers ??
-          data?.counts?.followers_count ??
-          0;
-
-        const following =
-          data?.following ??
-          data?.following_count ??
-          data?.count_following ??
-          data?.counts?.following ??
-          data?.counts?.following_count ??
-          0;
-
-        if (!mounted) return;
-        setFollowCounts({
-          followers: Number(followers) || 0,
-          following: Number(following) || 0,
-        });
-      } catch {
-        // keep defaults
-      }
-    };
-
-    loadCounts();
-    return () => {
-      mounted = false;
-    };
-  }, [viewerUserId]);
-
   const teams = [
     {
       id: 1,
@@ -367,113 +310,39 @@ const UserProfile = (props) => {
     },
   ];
 
-  const defaultPortfolioData = useMemo(
-    () => ({
-      featured: {
+  const portfolioData = {
+    featured: {
+      image:
+        "https://images.unsplash.com/photo-1560066984-138dadb4c035?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+      title: "SalonSync - Revolutionary AI-Powered Salon App UI/UX",
+      description:
+        "This project involves designing a next-generation salon mobile application with AI-powered recommendations.",
+      cost: "$600-$800",
+    },
+    items: [
+      {
         image:
-          "https://images.unsplash.com/photo-1560066984-138dadb4c035?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
-        title: "SalonSync - Revolutionary AI-Powered Salon App UI/UX",
-        description:
-          "This project involves designing a next-generation salon mobile application with AI-powered recommendations.",
+          "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+        title: "Title",
+        description: "Description",
+        cost: "$",
+      },
+      {
+        image:
+          "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+        title: "E-commerce Dashboard Redesign",
+        description: "This project involves designing more...",
         cost: "$600-$800",
       },
-      items: [
-        {
-          image:
-            "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-          title: "Title",
-          description: "Description",
-          cost: "$",
-        },
-        {
-          image:
-            "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-          title: "E-commerce Dashboard Redesign",
-          description: "This project involves designing more...",
-          cost: "$600-$800",
-        },
-        {
-          image:
-            "https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-          title: "E-commerce Dashboard Redesign",
-          description: "This project involves designing more...",
-          cost: "$600-$800",
-        },
-      ],
-    }),
-    [],
-  );
-
-  const [portfolioData, setPortfolioData] = useState(defaultPortfolioData);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const extractProjectImage = (p, fallback) => {
-      const candidate =
-        p?.cover_media?.url ||
-        p?.cover_media?.path ||
-        p?.cover_url ||
-        p?.coverUrl ||
-        p?.media?.[0]?.url ||
-        p?.media?.[0]?.path ||
-        "";
-      const url = typeof candidate === "string" ? candidate.trim() : "";
-      return url || fallback;
-    };
-
-    const extractCost = (p) => {
-      if (p?.cost_cents === null || p?.cost_cents === undefined || p?.cost_cents === "") return "";
-      const currency = String(p?.currency || "INR").trim();
-      return `${currency} ${p.cost_cents}`;
-    };
-
-    const normalizeProjects = (res) => {
-      const raw = res?.projects || res?.data?.projects || res?.portfolio?.projects || [];
-      return Array.isArray(raw) ? raw : [];
-    };
-
-    const loadPortfolioForProfile = async () => {
-      try {
-        const res = await getMyPortfolio();
-
-        // Also capture numeric user id from portfolio payload (your sample includes portfolio.user_id)
-        const portfolioObj = res?.portfolio || res?.data?.portfolio || null;
-        const portfolioUserId = portfolioObj?.user_id ?? null;
-        if (portfolioUserId && !viewerUserId) setViewerUserId(portfolioUserId);
-
-        const serverProjects = normalizeProjects(res)
-          .slice()
-          .sort((a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0));
-
-        if (!mounted) return;
-        if (serverProjects.length === 0) return; // keep default UI
-
-        const featuredFallback = defaultPortfolioData.featured.image;
-        const itemFallback = defaultPortfolioData.items?.[0]?.image || featuredFallback;
-
-        const mapProject = (p, fallbackImage) => ({
-          image: extractProjectImage(p, fallbackImage),
-          title: p?.title ?? "",
-          description: p?.description ?? "",
-          cost: extractCost(p),
-        });
-
-        const [first, ...rest] = serverProjects;
-        setPortfolioData({
-          featured: mapProject(first, featuredFallback),
-          items: rest.map((p) => mapProject(p, itemFallback)),
-        });
-      } catch {
-        // Keep current UI (no design change) if request fails.
-      }
-    };
-
-    loadPortfolioForProfile();
-    return () => {
-      mounted = false;
-    };
-  }, [defaultPortfolioData]);
+      {
+        image:
+          "https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+        title: "E-commerce Dashboard Redesign",
+        description: "This project involves designing more...",
+        cost: "$600-$800",
+      },
+    ],
+  };
 
   const listingsData = [
     {
@@ -655,7 +524,7 @@ const UserProfile = (props) => {
                         style={{ cursor: "pointer", textDecoration: "underline" }}
                         onClick={() => setOpenFollowModal(true)}
                       >
-                        {followCounts.followers} Friends
+                        123 Friends
                       </span>
 
                       <span className="meta-separator">•</span>
@@ -1670,8 +1539,6 @@ const UserProfile = (props) => {
         <FollowModal
           onClose={() => setOpenFollowModal(false)}
           theme={theme}
-          userId={viewerUserId}
-          onCountsChanged={(next) => setFollowCounts(next)}
         />
       )}
     </div >
@@ -1680,153 +1547,32 @@ const UserProfile = (props) => {
 
 /* ================= FOLLOWERS / FOLLOWING MODAL ================= */
 
-function FollowModal({ onClose, theme, userId, onCountsChanged }) {
+function FollowModal({ onClose, theme }) {
   const [tab, setTab] = useState("followers");
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
+  const [followersList, setFollowersList] = useState(
+    Array.from({ length: 10 }, (_, i) => ({
+      id: i,
+      name: "User Name",
+    }))
+  );
 
-  const [followersList, setFollowersList] = useState([]);
-  const [followingList, setFollowingList] = useState([]);
+  const [followingList, setFollowingList] = useState(
+    Array.from({ length: 8 }, (_, i) => ({
+      id: i + 100,
+      name: "User Name",
+    }))
+  );
 
-  const pickList = (res) => {
-    const data = res?.data ?? res;
-    const raw =
-      data?.followers ||
-      data?.following ||
-      data?.data ||
-      data?.users ||
-      data?.items ||
-      [];
-    return Array.isArray(raw) ? raw : [];
+  const removeFollower = (id) => {
+    setFollowersList(followersList.filter((u) => u.id !== id));
   };
 
-  const toUserRow = (u) => {
-    const base = u?.user || u?.follower || u?.following || u;
-    const id =
-      base?.id ??
-      base?.user_id ??
-      base?.uh_user_id ??
-      u?.id ??
-      u?.user_id ??
-      u?.uh_user_id ??
-      null;
-    const name =
-      base?.display_name ||
-      base?.name ||
-      [base?.first_name, base?.last_name].filter(Boolean).join(" ") ||
-      base?.username ||
-      base?.email ||
-      "User";
-
-    const avatar =
-      base?.avatar_url || base?.avatar || base?.photo_url || base?.profile_photo_url || "";
-    return {
-      id,
-      name: String(name).trim() || "User",
-      avatar: typeof avatar === "string" ? avatar : "",
-    };
-  };
-
-  const refreshCounts = async () => {
-    if (!userId) return;
-    try {
-      const res = await getFollowCounts(userId);
-      const data = res?.data ?? res;
-
-      const followers =
-        data?.followers ??
-        data?.followers_count ??
-        data?.follower_count ??
-        data?.count_followers ??
-        data?.counts?.followers ??
-        data?.counts?.followers_count ??
-        0;
-
-      const following =
-        data?.following ??
-        data?.following_count ??
-        data?.count_following ??
-        data?.counts?.following ??
-        data?.counts?.following_count ??
-        0;
-
-      onCountsChanged?.({
-        followers: Number(followers) || 0,
-        following: Number(following) || 0,
-      });
-    } catch {
-      // ignore
-    }
-  };
-
-  const loadTab = async (nextTab) => {
-    if (!userId) return;
-    setLoading(true);
-    setError("");
-    try {
-      if (nextTab === "followers") {
-        const res = await getFollowers(userId);
-        const rows = pickList(res).map(toUserRow).filter((x) => x.id);
-        setFollowersList(rows);
-      } else {
-        const res = await getFollowing(userId);
-        const rows = pickList(res).map(toUserRow).filter((x) => x.id);
-        setFollowingList(rows);
-      }
-      await refreshCounts();
-    } catch (e) {
-      setError(e?.message || "Request failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!userId) return;
-    loadTab(tab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, tab]);
-
-  const removeFollower = async (id) => {
-    setError("");
-    try {
-      await apiRemoveFollower(id);
-      setFollowersList((prev) => prev.filter((u) => u.id !== id));
-      await refreshCounts();
-    } catch (e) {
-      setError(e?.message || "Request failed");
-    }
-  };
-
-  const removeFollowing = async (id) => {
-    setError("");
-    try {
-      await unfollowUser(id);
-      setFollowingList((prev) => prev.filter((u) => u.id !== id));
-      await refreshCounts();
-    } catch (e) {
-      setError(e?.message || "Request failed");
-    }
-  };
-
-  const followBack = async (id) => {
-    setError("");
-    try {
-      await followUser(id);
-      await refreshCounts();
-    } catch (e) {
-      setError(e?.message || "Request failed");
-    }
+  const removeFollowing = (id) => {
+    setFollowingList(followingList.filter((u) => u.id !== id));
   };
 
   const currentList = tab === "followers" ? followersList : followingList;
-  const filteredList = currentList.filter((u) =>
-    String(u?.name || "")
-      .toLowerCase()
-      .includes(String(query || "").trim().toLowerCase()),
-  );
 
   return (
     <div
@@ -1874,8 +1620,6 @@ function FollowModal({ onClose, theme, userId, onCountsChanged }) {
         <div className="mb-3 md:mb-5 relative">
           <input
             placeholder="Search here"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
             className="w-full px-5 py-2.5 text-sm text-left bg-white rounded-full border border-gray-300 placeholder:text-center focus:outline-none focus:ring-0 focus:border-gray-300"
           />
           <span className="text-gray-500 pointer-events-none absolute right-5 top-2.5">
@@ -1886,39 +1630,21 @@ function FollowModal({ onClose, theme, userId, onCountsChanged }) {
           </span>
         </div>
 
-        {error ? (
-          <div className="mb-3 text-sm text-red-600">{error}</div>
-        ) : null}
-
         {/* LIST */}
         <div className="overflow-y-auto max-h-[360px] pr-2 space-y-5 custom-scroll">
-          {loading ? (
-            <div className="text-sm text-gray-600">Loading...</div>
-          ) : filteredList.length === 0 ? (
-            <div className="text-sm text-gray-600">No users found.</div>
-          ) : (
-            filteredList.map((u) => (
+          {currentList.map((u) => (
             <div key={u.id} className="flex items-center justify-between">
               <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0 pr-2">
-                <div className="w-9 h-9 md:w-11 md:h-11 shrink-0 bg-[#D9D9D9] rounded-full overflow-hidden">
-                  {u.avatar ? (
-                    <img src={u.avatar} alt="" className="w-full h-full object-cover" />
-                  ) : null}
-                </div>
+                <div className="w-9 h-9 md:w-11 md:h-11 shrink-0 bg-[#D9D9D9] rounded-full" />
                 <span className="text-xs md:text-sm font-medium truncate">{u.name}</span>
               </div>
 
               {tab === "followers" ? (
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => followBack(u.id)}
-                    className="px-2 md:px-4 py-1 md:py-1.5 text-[10px] md:text-xs bg-[#CEFF1B] rounded-md text-black whitespace-nowrap font-medium"
-                  >
+                  <button className="px-2 md:px-4 py-1 md:py-1.5 text-[10px] md:text-xs bg-[#CEFF1B] rounded-md text-black whitespace-nowrap font-medium">
                     Follow Back
                   </button>
                   <button
-                    type="button"
                     onClick={() => removeFollower(u.id)}
                     className="px-2 md:px-4 py-1 md:py-1.5 text-[10px] md:text-xs border rounded-md whitespace-nowrap font-medium"
                   >
@@ -1928,7 +1654,6 @@ function FollowModal({ onClose, theme, userId, onCountsChanged }) {
               ) : (
                 <div className="flex gap-2">
                   <button
-                    type="button"
                     onClick={() => removeFollowing(u.id)}
                     className="px-3 md:px-4 py-1 md:py-1.5 text-[10px] md:text-xs border rounded-md whitespace-nowrap font-medium"
                   >
@@ -1937,8 +1662,7 @@ function FollowModal({ onClose, theme, userId, onCountsChanged }) {
                 </div>
               )}
             </div>
-            ))
-          )}
+          ))}
         </div>
       </div>
     </div>
